@@ -17,7 +17,7 @@ class CandidateFilterTool(CodedTool):
         logger.info(f"Searching for candidates with requirements: {requirements}")
         # In a real implementation, write a dynamic query searching for the target skills
         # e.g., cursor.execute("SELECT id, experience, skills FROM candidate_pool WHERE skills LIKE ?", (f'%{requirements}%',))
-        cursor.execute("SELECT id, experience, skills FROM candidate_pool") # Simulating an empty pool return
+        cursor.execute("SELECT id, experience, skills, email FROM candidate_pool") # Simulating an empty pool return
         rows = cursor.fetchall()
         conn.close()
         
