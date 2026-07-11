@@ -2,6 +2,7 @@ import sqlite3
 import json
 from typing import Dict, Any, Union
 from neuro_san.interfaces.coded_tool import CodedTool
+from logging import getLogger,Logger
 
 class CandidateFilterTool(CodedTool):
     
@@ -9,12 +10,14 @@ class CandidateFilterTool(CodedTool):
         # return json.dumps({"status": "empty", "matching_candidates": []})
         requirements = args.get("requirements", "")
         
+        logger: Logger = getLogger(__name__)
         conn = sqlite3.connect("candidates.db")
         cursor = conn.cursor()
         
+        logger.info(f"Searching for candidates with requirements: {requirements}")
         # In a real implementation, write a dynamic query searching for the target skills
         # e.g., cursor.execute("SELECT id, experience, skills FROM candidate_pool WHERE skills LIKE ?", (f'%{requirements}%',))
-        cursor.execute("SELECT id, experience, skills FROM candidate_pool") # Simulating an empty pool return
+        cursor.execute("SELECT id, experience, skills, email FROM candidate_pool") # Simulating an empty pool return
         rows = cursor.fetchall()
         conn.close()
         
