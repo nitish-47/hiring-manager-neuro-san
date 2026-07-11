@@ -64,7 +64,7 @@ export GOOGLE_API_KEY="your_api_key_here"
 ### 5. Run the Application
 
 ```bash
-uv run ns run
+ns run
 ```
 
 ## Requirements
