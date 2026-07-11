@@ -1,6 +1,6 @@
 # hiring-manager-neuro-san
 
-A hiring manager application powered by Google AI.
+A hiring manager application powered by Neuro-SAN-studio.
 
 ## Quick Start
 
