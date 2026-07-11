@@ -1,0 +1,74 @@
+include "registries/aaosa_basic.hocon",
+include "registries/expertise_scoping_instructions.hocon",
+
+"metadata": {
+    "description": "Candidate shortlisting agent network with built-in empty-state validation and structured python tool integration.",
+    "tags": ["recruiting", "shortlist", "filtering", "gemini-flash", "validation"],
+    "sample_queries": [
+        "Find candidates specialized in building data pipelines with Apache Kafka.",
+        "Shortlist mid-level cloud developers with experience in Azure."
+    ]
+},
+
+"tools": [
+    # 1. THE FRONTMAN MUST BE FIRST (ShortlistOrchestrator)
+    # The framework reads this first element as the entry point network node.
+    {
+        "name": "ShortlistOrchestrator",
+        "function": {
+            "description": "Primary interface to find, evaluate, and shortlist suitable job applicants based on a job specification."
+        },
+        "llm_config": {
+            "model_name": "gemini-3-flash"
+        },
+        "instructions": ${expertise_scoping_instructions} """
+You are the primary ShortlistOrchestrator. Your objective is to capture the user's Job Description requirements and hand them off down-chain.
+1. Route the target requirements directly to the RecruitmentScreener agent.
+2. Read the context log response from the RecruitmentScreener.
+3. CRITICAL VALIDATION STEP: If the RecruitmentScreener explicitly states that NO matching candidates were found in the system, DO NOT render an empty table. Instead, stop and output a prominent user alert warning:
+   'NO MATCHING CANDIDATES FOUND: The current candidate pool does not contain applicants matching these technical criteria. Consider broadening the skill requirements.'
+4. Otherwise, if matching candidates are found, construct a clean markdown table showing: Rank, Candidate ID, Match Score %, and Core Alignment.
+Do not use emoticons outside of the empty state warning flag. Keep the layout professional.
+""" ${aaosa_instructions},
+        "tools": ["RecruitmentScreener"]
+    },
+
+    # 2. SUB-AGENT: RECRUITMENT SCREENER
+    {
+        "name": "RecruitmentScreener",
+        "function": ${aaosa_call}{
+            "description": "Queries the candidate database using job requirements and evaluates individual match metrics."
+        },
+        "llm_config": {
+            "model_name": "gemini-3-flash"
+        },
+        "instructions": """
+Your name is RecruitmentScreener. Your task is to extract candidates matching the target criteria.
+1. Call the `CandidateFilterTool`, passing the extracted keywords/requirements as arguments.
+2. Read the output payload from the tool. 
+3. CRITICAL FALLBACK CONDITIONAL: If the tool returns an empty list, returns an error string, or indicates 0 records found, you MUST output the exact literal string: 'NO_SUITABLE_CANDIDATES_FOUND'. Do not invent or hallucinate candidate names or IDs.
+4. If candidate profiles are present in the JSON, perform your technical evaluation matrix scoring and print out the compiled match details.
+""" ${aaosa_instructions},
+        "tools": ["CandidateFilterTool"]
+    },
+
+    # 3. PYTHON CODED TOOL MOVED TO THE BOTTOM
+    # Keeping CodedTools out of the first position resolves the "No valid front man found" runtime crash.
+    {
+        "name": "CandidateFilterTool",
+        "class": "candidate_filter.CandidateFilterTool",
+        "function": {
+            "description": "Queries the candidate database repository for resume metrics matching specific skill keywords and returns a JSON array of matching records.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "requirements": {
+                        "type": "string",
+                        "description": "Key technical requirements extracted from the target job profile (e.g., 'Python, Spark, Kafka')."
+                    }
+                },
+                "required": ["requirements"]
+            }
+        }
+    }
+]
