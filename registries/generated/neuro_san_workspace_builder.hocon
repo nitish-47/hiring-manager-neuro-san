@@ -109,7 +109,7 @@ For every required artifact:
 3. Call WorkspaceWriteTool with the exact project-relative path and complete content.
 4. For each generated network HOCON, call ManifestUpdateTool after the file write succeeds.
 
-Write generated networks under registries/generated/. Write generated CodedTools under coded_tools/generated/<network_name>/. Use class paths that resolve relative to AGENT_TOOL_PATH=coded_tools, for example generated.my_network.some_tool.SomeTool.
+Write generated networks under registries/generated/. Write generated CodedTools under coded_tools/generated/<network_name>/. Use network-local class references compatible with this project's Neuro SAN 0.6.x layout, for example some_tool.SomeTool. Store the implementation in the tool directory matching the generated network path.
 
 CodedTool rules: one class per file, async_invoke preferred, blocking work via asyncio.to_thread, dict.get(), specific exception handling, lazy logging, no print, no sly_data or secret logging.
 
@@ -144,7 +144,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     }
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.project_inspect_tool.ProjectInspectTool"
+            "class": "project_inspect_tool.ProjectInspectTool"
         },
         {
             "name": "ProjectReadTool",
@@ -159,7 +159,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     "required": ["path"]
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.project_read_tool.ProjectReadTool"
+            "class": "project_read_tool.ProjectReadTool"
         },
         {
             "name": "ToolboxSearchTool",
@@ -173,7 +173,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     "required": ["query"]
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.toolbox_search_tool.ToolboxSearchTool"
+            "class": "toolbox_search_tool.ToolboxSearchTool"
         },
         {
             "name": "WorkspaceWriteTool",
@@ -189,7 +189,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     "required": ["path", "content"]
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.workspace_write_tool.WorkspaceWriteTool",
+            "class": "workspace_write_tool.WorkspaceWriteTool",
             "args": {
                 "allowed_prefixes": [
                     "registries/generated/",
@@ -214,7 +214,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     "required": ["network_path"]
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.manifest_update_tool.ManifestUpdateTool",
+            "class": "manifest_update_tool.ManifestUpdateTool",
             "args": {"manifest_path": "registries/generated/manifest.hocon"}
         },
         {
@@ -230,7 +230,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     "required": ["path"]
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.hocon_validate_tool.HoconValidateTool"
+            "class": "hocon_validate_tool.HoconValidateTool"
         },
         {
             "name": "TestRunnerTool",
@@ -244,7 +244,7 @@ Return PASS only if validation succeeds and there are no concrete defects. Other
                     }
                 }
             },
-            "class": "generated.neuro_san_workspace_builder.test_runner_tool.TestRunnerTool"
+            "class": "test_runner_tool.TestRunnerTool"
         }
     ]
 }
