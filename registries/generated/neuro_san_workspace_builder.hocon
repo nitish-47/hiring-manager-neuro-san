@@ -1,0 +1,250 @@
+{
+    include "registries/aaosa_basic.hocon",
+    include "config/llm_config.hocon",
+
+    "metadata": {
+        "description": "Meta-agent that designs Neuro SAN networks, writes generated HOCON/CodedTools/middleware into the current project workspace, updates the generated registry manifest, validates the network, and runs tests.",
+        "tags": ["meta-agent", "developer-tool", "code-generation", "workspace"],
+        "sample_queries": [
+            "Create a Neuro SAN network for processing support tickets and write it into this project.",
+            "Build an agent network that reuses existing HTTP and RAG tools wherever possible.",
+            "Generate a new Neuro SAN agent with any required CodedTools, register it, and validate it."
+        ]
+    },
+
+    "max_steps": 120,
+    "max_execution_seconds": 900,
+
+    "tools": [
+        {
+            "name": "NeuroSanWorkspaceBuilder",
+            "function": {
+                "description": "Builds a Neuro SAN agent network directly in the current project workspace, including generated HOCON, missing CodedTools or middleware, manifest registration, validation, and tests.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "Natural-language description of the agent network to create or modify."
+                        },
+                        "network_name": {
+                            "type": "string",
+                            "description": "Optional snake_case network name. Infer one when omitted."
+                        },
+                        "group": {
+                            "type": "string",
+                            "description": "Generated registry group. Use generated unless the user explicitly requests another safe generated subdirectory."
+                        }
+                    },
+                    "required": ["request"]
+                }
+            },
+            "instructions": """
+You are the front man for a Neuro SAN workspace builder. Your definition of success is that the requested network has been written into the current project, registered, structurally validated, and tested where practical. Do not stop after merely printing code.
+
+Mandatory workflow:
+1. Call ReusePlanner to inspect the current project and identify existing agents, CodedTools, toolbox capabilities, middleware, and MCP/subnetwork options that should be reused.
+2. Call NetworkArchitect to design a Neuro SAN-compatible topology and exact files.
+3. Call ImplementationCoder to write every required generated file into the workspace. It must use WorkspaceWriteTool for file creation/update and ManifestUpdateTool for registration. It must never claim a file was written unless the tool confirms it.
+4. Call QualityReviewer. It must invoke HoconValidateTool on every generated network HOCON and TestRunnerTool when relevant tests exist.
+5. If validation or tests fail, send the concrete failure back to ImplementationCoder, rewrite the affected files, and re-run QualityReviewer. Repeat until passing or until a real external dependency blocks progress.
+
+Generation rules:
+- Generated network HOCON belongs under registries/generated/<network_name>.hocon.
+- Generated Python belongs under coded_tools/generated/<network_name>/, one CodedTool class per file.
+- Custom generated middleware belongs under middleware/generated/<network_name>/ only when existing middleware cannot satisfy the requirement.
+- Register generated networks in registries/generated/manifest.hocon using ManifestUpdateTool.
+- Prefer existing subnetworks, toolbox tools, MCP tools, CodedTools, and middleware before generating new code.
+- Deterministic work such as filesystem access, subprocesses, parsing, API calls, registry mutation, and secret handling must be implemented as CodedTools, not as LLM instructions.
+- Never write secrets into source files or HOCON.
+- Never invent Neuro SAN keys or APIs. Inspect current project examples when uncertain.
+- A generated HOCON must have exactly one front man as the first entry in its top-level tools list, explicit max_steps and max_execution_seconds, valid function schemas, and resolvable tool references.
+
+Your final response should summarize files actually written, reused capabilities, validation/test status, and any external requirements. Do not dump code that has already been written unless the user explicitly asks to see it.
+""" ${aaosa_instructions},
+            "tools": ["ReusePlanner", "NetworkArchitect", "ImplementationCoder", "QualityReviewer"]
+        },
+
+        {
+            "name": "ReusePlanner",
+            "function": ${aaosa_call}{
+                "description": "Inspects the current Neuro SAN project and produces a reuse-first capability plan for a requested network."
+            },
+            "instructions": """
+You are the reuse planner. Before proposing new Python, inspect the current project with ProjectInspectTool and read relevant files with ProjectReadTool. Search toolbox definitions with ToolboxSearchTool for capabilities related to the request.
+
+Classify every required capability as one of: EXISTING_AGENT, EXISTING_CODED_TOOL, TOOLBOX, MCP_OR_SUBNETWORK_TO_VERIFY, GENERATE_CODED_TOOL, GENERATE_MIDDLEWARE, or LLM_REASONING.
+
+Return exact existing file/class/tool names when discovered. Do not invent names. Prefer reuse whenever an existing capability adequately satisfies the requirement.
+""" ${aaosa_instructions},
+            "tools": ["ProjectInspectTool", "ProjectReadTool", "ToolboxSearchTool"]
+        },
+
+        {
+            "name": "NetworkArchitect",
+            "function": ${aaosa_call}{
+                "description": "Designs the exact Neuro SAN topology, HOCON structure, tool wiring, and generated file plan using current-project conventions."
+            },
+            "instructions": """
+You are the network architect. Use ProjectReadTool to inspect current working examples such as registries/aaosa_basic.hocon and existing network HOCONs whenever syntax is uncertain.
+
+Design the smallest useful topology. The first entry in top-level tools is the only front man. AAOSA sub-agents should extend the shared function contract using ${aaosa_call}{ ... } and append ${aaosa_instructions} to their instructions when AAOSA routing is used. Deterministic CodedTools are ordinary tool entries with class + function and are not AAOSA agents.
+
+Specify exact paths and complete intended content for every generated HOCON/Python/middleware/test artifact. Do not perform writes yourself.
+""" ${aaosa_instructions},
+            "tools": ["ProjectReadTool"]
+        },
+
+        {
+            "name": "ImplementationCoder",
+            "function": ${aaosa_call}{
+                "description": "Writes the architected Neuro SAN HOCON and Python artifacts into the current project and registers generated networks."
+            },
+            "instructions": """
+You are the implementation agent. You must mutate the current workspace through deterministic tools; returning source text without writing it is incomplete.
+
+For every required artifact:
+1. Read an existing file first when modifying it.
+2. Generate complete executable content following current Neuro SAN project conventions.
+3. Call WorkspaceWriteTool with the exact project-relative path and complete content.
+4. For each generated network HOCON, call ManifestUpdateTool after the file write succeeds.
+
+Write generated networks under registries/generated/. Write generated CodedTools under coded_tools/generated/<network_name>/. Use class paths that resolve relative to AGENT_TOOL_PATH=coded_tools, for example generated.my_network.some_tool.SomeTool.
+
+CodedTool rules: one class per file, async_invoke preferred, blocking work via asyncio.to_thread, dict.get(), specific exception handling, lazy logging, no print, no sly_data or secret logging.
+
+Never claim success based only on reasoning; cite the tool result in your response to the parent agent.
+""" ${aaosa_instructions},
+            "tools": ["ProjectReadTool", "WorkspaceWriteTool", "ManifestUpdateTool"]
+        },
+
+        {
+            "name": "QualityReviewer",
+            "function": ${aaosa_call}{
+                "description": "Validates generated Neuro SAN HOCON files and runs relevant tests, returning exact failures for repair."
+            },
+            "instructions": """
+You are the quality gate. Inspect written artifacts with ProjectReadTool. For every generated network, call HoconValidateTool with its path. If tests were generated or existing targeted tests apply, call TestRunnerTool.
+
+Review for: first tool is the front man; no class/toolbox front man; valid ${aaosa_call}{...} usage; explicit limits; resolvable tool names/class paths; no secrets; deterministic operations kept in code; generated network is present in registries/generated/manifest.hocon; Python follows one-class-per-file and async-safe conventions.
+
+Return PASS only if validation succeeds and there are no concrete defects. Otherwise return the exact file/path and correction needed.
+""" ${aaosa_instructions},
+            "tools": ["ProjectReadTool", "HoconValidateTool", "TestRunnerTool"]
+        },
+
+        {
+            "name": "ProjectInspectTool",
+            "function": {
+                "description": "Inspects the current project tree and returns Neuro SAN-relevant files and directories.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "max_depth": {"type": "integer", "description": "Maximum directory depth to inspect."}
+                    }
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.project_inspect_tool.ProjectInspectTool"
+        },
+        {
+            "name": "ProjectReadTool",
+            "function": {
+                "description": "Reads a UTF-8 text file from the current project using a safe project-relative path.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Project-relative path to read."},
+                        "max_chars": {"type": "integer", "description": "Optional maximum characters returned."}
+                    },
+                    "required": ["path"]
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.project_read_tool.ProjectReadTool"
+        },
+        {
+            "name": "ToolboxSearchTool",
+            "function": {
+                "description": "Searches project and configured Neuro SAN toolbox definition files for reusable tool names and definitions.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Capability or tool-name search text."}
+                    },
+                    "required": ["query"]
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.toolbox_search_tool.ToolboxSearchTool"
+        },
+        {
+            "name": "WorkspaceWriteTool",
+            "function": {
+                "description": "Atomically writes a generated UTF-8 source/config file inside approved current-project directories.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Approved project-relative output path."},
+                        "content": {"type": "string", "description": "Complete file content."},
+                        "overwrite": {"type": "boolean", "description": "Whether an existing file may be replaced."}
+                    },
+                    "required": ["path", "content"]
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.workspace_write_tool.WorkspaceWriteTool",
+            "args": {
+                "allowed_prefixes": [
+                    "registries/generated/",
+                    "coded_tools/generated/",
+                    "middleware/generated/",
+                    "tests/fixtures/",
+                    "docs/examples/generated/"
+                ]
+            }
+        },
+        {
+            "name": "ManifestUpdateTool",
+            "function": {
+                "description": "Safely adds or updates a generated network entry in registries/generated/manifest.hocon.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "network_path": {"type": "string", "description": "Network path relative to registries, for example generated/my_network.hocon."},
+                        "serve": {"type": "boolean", "description": "Whether the network should be served."},
+                        "public": {"type": "boolean", "description": "Optional public visibility flag."}
+                    },
+                    "required": ["network_path"]
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.manifest_update_tool.ManifestUpdateTool",
+            "args": {"manifest_path": "registries/generated/manifest.hocon"}
+        },
+        {
+            "name": "HoconValidateTool",
+            "function": {
+                "description": "Runs Neuro SAN structural validation for a project HOCON network and returns exit code and output.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Project-relative HOCON path to validate."},
+                        "verbose": {"type": "boolean", "description": "Enable verbose validator output."}
+                    },
+                    "required": ["path"]
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.hocon_validate_tool.HoconValidateTool"
+        },
+        {
+            "name": "TestRunnerTool",
+            "function": {
+                "description": "Runs a restricted pytest invocation in the current project and returns exit code and output.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string", "description": "Optional project-relative pytest target."},
+                        "keyword": {"type": "string", "description": "Optional pytest -k expression."}
+                    }
+                }
+            },
+            "class": "generated.neuro_san_workspace_builder.test_runner_tool.TestRunnerTool"
+        }
+    ]
+}
